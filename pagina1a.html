@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calcolo Orari del Sole</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f8ff;
+            padding: 20px;
+            text-align: center;
+        }
+        h1 {
+            color: #007bff;
+        }
+        .container {
+            margin: 20px auto;
+            max-width: 600px;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        label {
+            font-size: 16px;
+            font-weight: bold;
+        }
+        input {
+            padding: 8px;
+            font-size: 16px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 10px;
+            text-align: center;
+        }
+        th {
+            background-color: #007bff;
+            color: white;
+        }
+        td {
+            background-color: #f9f9f9;
+        }
+        .output {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Calcolo Orari del Sole</h1>
+        <label for="lat">Latitudine:</label>
+        <input type="number" id="lat" step="0.01" placeholder="Es. 45.27"><br>
+        <label for="lon">Longitudine:</label>
+        <input type="number" id="lon" step="0.01" placeholder="Es. 9.09"><br>
+        <label for="date">Data (Mese-Anno):</label>
+        <input type="month" id="date"><br>
+        <button onclick="calculateSunTimes()">Calcola</button>
+
+        <div id="results" class="output"></div>
+    </div>
+
+    <script>
+        function calculateSunTimes() {
+            const lat = parseFloat(document.getElementById("lat").value);
+            const lon = parseFloat(document.getElementById("lon").value);
+            const date = document.getElementById("date").value;
+
+            if (!lat || !lon || !date) {
+                alert("Per favore, inserisci tutte le informazioni.");
+                return;
+            }
+
+            const [year, month] = date.split('-');
+            const daysInMonth = new Date(year, month, 0).getDate();
+            const table = document.getElementById("results");
+            let resultsHTML = `<h3>Coordinate: ${lat.toFixed(2)}°, ${lon.toFixed(2)}°</h3>`;
+
+            // Aggiungiamo l'intestazione della tabella
+            resultsHTML += "<table><tr><th>Data</th><th>Levata</th><th>Culminazione</th><th>Tramonto</th></tr>";
+
+            // Calcoliamo gli orari per ogni giorno del mese
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateObj = new Date(year, month - 1, day);
+                const sunTimes = getSunTimes(dateObj, lat, lon);
+
+                // Verifica se è orario legale
+                const isDST = isDaylightSavingTime(dateObj);
+
+                // Formattiamo i risultati
+                const sunrise = formatTime(sunTimes.sunrise);
+                const solarNoon = formatTime(sunTimes.solarNoon);
+                const sunset = formatTime(sunTimes.sunset);
+
+                // Aggiungiamo una riga alla tabella
+                resultsHTML += `<tr>
+                    <td>${day}/${month}/${year}</td>
+                    <td>${sunrise}${isDST ? " *" : ""}</td>
+                    <td>${solarNoon}</td>
+                    <td>${sunset}${isDST ? " *" : ""}</td>
+                </tr>`;
+            }
+
+            // Chiudiamo la tabella
+            resultsHTML += "</table>";
+            document.getElementById("results").innerHTML = resultsHTML;
+        }
+
+        function getSunTimes(date, lat, lon) {
+            // Converti la data in giorni giuliani
+            const jd = toJulian(date);
+
+            // Calcola il tempo siderale
+            const T = (jd - 2451545.0) / 36525;
+            const theta0 = 280.46061837 + 360.98564736629 * (jd - 2451545.0) + 0.000387933 * T * T - T * T * T / 38710000;
+
+            // Calcola la declinazione del Sole
+            const M = 357.52911 + 35999.05029 * T - 0.0001537 * T * T;
+            const C = (1.914602 - 0.004817 * T - 0.000014 * T * T) * Math.sin(rad(M)) +
+                      (0.019993 - 0.000101 * T) * Math.sin(rad(2 * M)) +
+                      0.000289 * Math.sin(rad(3 * M));
+            const lambda = mod(280.46646 + 36000.76983 * T + 0.0003032 * T * T + C, 360);
+            const delta = Math.asin(Math.sin(rad(lambda)) * Math.sin(rad(23.4392911)));
+
+            // Calcola l'ora di levata, culminazione e tramonto
+            const H0 = rad(-0.8333);
+            const cosH = (Math.sin(H0) - Math.sin(rad(lat)) * Math.sin(delta)) / (Math.cos(rad(lat)) * Math.cos(delta));
+            const H = Math.acos(cosH);
+            const sunrise = mod(theta0 - deg(H), 360) / 15;
+            const sunset = mod(theta0 + deg(H), 360) / 15;
+            const solarNoon = mod(theta0 - lon, 360) / 15;
+
+            return {
+                sunrise: new Date(date.getTime() + (sunrise * 3600000)),
+                solarNoon: new Date(date.getTime() + (solarNoon * 3600000)),
+                sunset: new Date(date.getTime() + (sunset * 3600000))
+            };
+        }
+
+        function toJulian(date) {
+            return date.getTime() / 86400000 + 2440587.5;
+        }
+
+        function rad(deg) {
+            return deg * Math.PI / 180;
+        }
+
+        function deg(rad) {
+            return rad * 180 / Math.PI;
+        }
+
+        function mod(a, b) {
+            return a - b * Math.floor(a / b);
+        }
+
+        function isDaylightSavingTime(date) {
+            const year = date.getFullYear();
+            const startDST = new Date(year, 2, 31 - new Date(year, 2, 31).getDay());
+            const endDST = new Date(year, 9, 31 - new Date(year, 9, 31).getDay());
+            return date >= startDST && date < endDST;
+        }
+
+        function formatTime(date) {
+            const hours = date.getHours();
+            const minutes = date.getMinutes();
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        }
+    </script>
+</body>
+</html>
