@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calcolo Orari Sole - Pagina 1</title>
+    <style>
+        body {
+            font-family: Calibri, sans-serif;
+            background-color: #f0f8ff;
+            padding: 20px;
+            text-align: center;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 30px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .input-container {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 10px;
+            margin-right: 20px;
+        }
+        .coordinate-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        table {
+            margin-top: 20px;
+            border-collapse: collapse;
+            width: 80%;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 10px;
+            text-align: center;
+            font-size: 16px;
+        }
+        th {
+            background-color: #007bff;
+            color: white;
+        }
+        td {
+            background-color: #f9f9f9;
+        }
+        td:hover {
+            background-color: #e6f7ff;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .output {
+            text-align: center;
+        }
+        #downloadButton {
+            background-color: #28a745;
+        }
+        #downloadButton:hover {
+            background-color: #218838;
+        }
+        label {
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .container input {
+            padding: 8px;
+            font-size: 16px;
+            margin-top: 5px;
+            width: 150px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        h2 {
+            font-size: 24px;
+            color: #007bff;
+            margin-bottom: 20px;
+        }
+
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
+    <script>
+        function calculateSunTimes() {
+            const lat = parseFloat(document.getElementById("lat").value);
+            const lon = parseFloat(document.getElementById("lon").value);
+            const date = document.getElementById("date").value;
+
+            if (!lat || !lon || !date) {
+                alert("Per favore, inserisci tutte le informazioni.");
+                return;
+            }
+
+            const [year, month] = date.split('-');
+            const daysInMonth = new Date(year, month, 0).getDate();
+            const table = document.getElementById("results");
+            let resultsHTML = `<h3>Coordinate: ${lat.toFixed(2)}°, ${lon.toFixed(2)}°</h3>`;
+
+            // Aggiungiamo l'intestazione della tabella
+            resultsHTML += "<table id='sunTimesTable'><tr><th>Data</th><th>Levata</th><th>Culminazione</th><th>Tramonto</th></tr>";
+
+            // Calcoliamo gli orari per ogni giorno del mese
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateObj = new Date(year, month - 1, day);
+                const sunTimes = SunCalc.getTimes(dateObj, lat, lon);
+                
+                // Verifica se è orario legale
+                const isDST = dateObj.getMonth() > 2 && dateObj.getMonth() < 10;
+                
+                // Formattiamo i risultati
+                const sunrise = formatTime(sunTimes.sunrise);
+                const solarNoon = formatTime(sunTimes.solarNoon);
+                const sunset = formatTime(sunTimes.sunset);
+
+                // Aggiungiamo una riga alla tabella
+                resultsHTML += `<tr>
+                    <td>${day}/${month}/${year}</td>
+                    <td>${sunrise}${isDST ? " *" : ""}</td>
+                    <td>${solarNoon}</td>
+                    <td>${sunset}${isDST ? " *" : ""}</td>
+                </tr>`;
+            }
+
+            // Chiudiamo la tabella
+            resultsHTML += "</table>";
+            document.getElementById("results").innerHTML = resultsHTML;
+            
+            // Abilita il pulsante per il download del CSV
+            document.getElementById("downloadButton").style.display = 'inline-block';
+        }
+
+        function formatTime(date) {
+            const hours = date.getHours();
+            const minutes = date.getMinutes();
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        }
+
+        function downloadCSV() {
+            const table = document.getElementById("sunTimesTable");
+            let csv = [];
+            
+            // Aggiungi l'intestazione della tabella
+            const headers = [];
+            for (let th of table.querySelectorAll("th")) {
+                headers.push(th.innerText);
+            }
+            csv.push(headers.join(","));
+
+            // Aggiungi i dati della tabella
+            for (let row of table.querySelectorAll("tr")) {
+                const rowData = [];
+                for (let cell of row.querySelectorAll("td")) {
+                    rowData.push(cell.innerText);
+                }
+                if (rowData.length > 0) {
+                    csv.push(rowData.join(","));
+                }
+            }
+
+            // Crea il file CSV
+            const csvContent = "data:text/csv;charset=utf-8," + csv.join("\n");
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "orari_sole.csv");
+            document.body.appendChild(link);
+            link.click();
+        }
+
+        // Funzione per impostare le coordinate della città
+        function setCoordinates(city) {
+            let lat, lon;
+            switch(city) {
+                case 'Milano':
+                    lat = 45.27;
+                    lon = 9.09;
+                    break;
+                case 'Roma':
+                    lat = 41.54;
+                    lon = 12.29;
+                    break;
+                case 'Bari':
+                    lat = 41.07;
+                    lon = 16.52;
+                    break;
+            }
+            document.getElementById("lat").value = lat;
+            document.getElementById("lon").value = lon;
+        }
+
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="input-container">
+            <h2>Calcolo levata, culminazione, tramonto del Sole</h2>
+
+            <label for="lat">Latitudine:</label>
+            <input type="number" id="lat" value="45.27" step="0.01">
+
+            <label for="lon">Longitudine:</label>
+            <input type="number" id="lon" value="9.09" step="0.01">
+
+            <label for="date">Data (Anno-Mese):</label>
+            <input type="month" id="date" value="2025-02">
+
+            <button onclick="calculateSunTimes()">Calcola</button>
+        </div>
+
+        <!-- Pulsanti per scegliere una città -->
+        <div class="coordinate-buttons">
+            <button onclick="setCoordinates('Milano')">Milano</button>
+            <button onclick="setCoordinates('Roma')">Roma</button>
+            <button onclick="setCoordinates('Bari')">Bari</button>
+        </div>
+    </div>
+
+    <div id="results" class="output"></div>
+
+    <!-- Pulsante per scaricare il CSV -->
+    <button id="downloadButton" style="display:none;" onclick="downloadCSV()">Scarica CSV</button>
+
+</body>
+</html>
